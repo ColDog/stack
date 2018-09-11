@@ -167,7 +167,7 @@ EOF
 }
 
 module "elb" {
-  source = "../elb"
+  source = "./elb"
 
   name            = "${module.task.name}"
   port            = "${var.port}"
