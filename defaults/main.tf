@@ -22,19 +22,25 @@ variable "cidr" {
   description = "The CIDR block to provision for the VPC"
 }
 
-variable "default_ecs_ami" {
-  default = {
-    us-east-1      = "ami-dde4e6ca"
-    us-west-1      = "ami-6d21770d"
-    us-west-2      = "ami-97da70f7"
-    eu-west-1      = "ami-c41f3bb7"
-    eu-central-1   = "ami-4ba16024"
-    ap-northeast-1 = "ami-90ea86f7"
-    ap-northeast-2 = "ami-8a4b9ce4"
-    ap-southeast-1 = "ami-d603afb5"
-    ap-southeast-2 = "ami-1ddce47e"
-    sa-east-1      = "ami-29039a45"
+data "aws_ami" "aws_optimized_ecs" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["amzn-ami*amazon-ecs-optimized"]
   }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["591542846629"] # AWS
 }
 
 # http://docs.aws.amazon.com/ElasticLoadBalancing/latest/DeveloperGuide/enable-access-logs.html#attach-bucket-policy
@@ -60,7 +66,7 @@ output "domain_name_servers" {
 }
 
 output "ecs_ami" {
-  value = "${lookup(var.default_ecs_ami, var.region)}"
+  value = "${data.aws_ami.aws_optimized_ecs.id}"
 }
 
 output "s3_logs_account_id" {
