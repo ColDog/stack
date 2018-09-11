@@ -43,10 +43,6 @@ variable "security_groups" {
   description = "Comma separated list of security group IDs that will be passed to the ELB module"
 }
 
-variable "port" {
-  description = "The container host port"
-}
-
 variable "cluster" {
   description = "The cluster name or ARN"
 }
@@ -81,6 +77,14 @@ variable "internal_zone_id" {
   description = "The zone ID to create the record in"
 }
 
+variable "container_port" {
+  description = "The container port"
+}
+
+variable "vpc_id" {
+  description = "VPC identifier"
+}
+
 /**
  * Options.
  */
@@ -90,9 +94,9 @@ variable "healthcheck" {
   default     = "/"
 }
 
-variable "container_port" {
-  description = "The container port"
-  default     = 3000
+variable "host_port" {
+  description = "The container host port"
+  default     = 0
 }
 
 variable "command" {
@@ -144,13 +148,13 @@ resource "aws_ecs_service" "main" {
   deployment_maximum_percent         = "${var.deployment_maximum_percent}"
 
   load_balancer {
-    elb_name       = "${module.elb.id}"
-    container_name = "${module.task.name}"
-    container_port = "${var.container_port}"
+    target_group_arn = "${module.elb.target_id}"
+    container_name   = "${module.task.name}"
+    container_port   = "${var.container_port}"
   }
 
   lifecycle {
-    create_before_destroy = true
+    ignore_changes = ["desired_count"]
   }
 }
 
@@ -169,17 +173,17 @@ module "task" {
   [
     {
       "containerPort": ${var.container_port},
-      "hostPort": ${var.port}
+      "hostPort": ${var.host_port}
     }
   ]
 EOF
 }
 
 module "elb" {
-  source = "./elb"
+  source = "./lb"
 
   name               = "${module.task.name}"
-  port               = "${var.port}"
+  port               = "${var.container_port}"
   environment        = "${var.environment}"
   subnet_ids         = "${var.subnet_ids}"
   external_dns_name  = "${coalesce(var.external_dns_name, module.task.name)}"
@@ -190,6 +194,7 @@ module "elb" {
   security_groups    = "${var.security_groups}"
   log_bucket         = "${var.log_bucket}"
   ssl_certificate_id = "${var.ssl_certificate_id}"
+  vpc_id             = "${var.vpc_id}"
 }
 
 /**

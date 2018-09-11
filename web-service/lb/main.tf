@@ -2,6 +2,8 @@
  * The ELB module creates an ELB, security group
  * a route53 record and a service healthcheck.
  * It is used by the service module.
+ *
+ * TODO: Change to use a fixed external LB.
  */
 
 variable "name" {
@@ -49,55 +51,69 @@ variable "internal_zone_id" {
 }
 
 variable "ssl_certificate_id" {
+  description = "SSL certificate ARN"
+}
+
+variable "vpc_id" {
+  description = "Main VPC id"
 }
 
 /**
  * Resources.
  */
 
-resource "aws_elb" "main" {
-  name = "${var.name}"
+resource "aws_lb" "main" {
+  name = "${var.name}-lb"
 
-  internal                  = false
-  cross_zone_load_balancing = true
-  subnets                   = ["${split(",", var.subnet_ids)}"]
-  security_groups           = ["${split(",",var.security_groups)}"]
-
-  idle_timeout                = 30
-  connection_draining         = true
-  connection_draining_timeout = 15
-
-  listener {
-    lb_port           = 80
-    lb_protocol       = "http"
-    instance_port     = "${var.port}"
-    instance_protocol = "http"
-  }
-
-  listener {
-    lb_port            = 443
-    lb_protocol        = "https"
-    instance_port      = "${var.port}"
-    instance_protocol  = "http"
-    ssl_certificate_id = "${var.ssl_certificate_id}"
-  }
-
-  health_check {
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 5
-    target              = "HTTP:${var.port}${var.healthcheck}"
-    interval            = 30
-  }
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = ["${split(",", var.subnet_ids)}"]
+  security_groups    = ["${split(",",var.security_groups)}"]
+  idle_timeout       = 30
 
   access_logs {
     bucket = "${var.log_bucket}"
   }
 
   tags {
-    Name        = "${var.name}-balancer"
+    Name        = "${var.name}-lb"
     Service     = "${var.name}"
     Environment = "${var.environment}"
+  }
+}
+
+resource "aws_lb_target_group" "main" {
+  name     = "${var.name}"
+  port     = "${var.port}"
+  protocol = "HTTP"
+  vpc_id   = "${var.vpc_id}"
+}
+
+resource "aws_lb_listener" "insecure" {
+  load_balancer_arn = "${aws_lb.main.arn}"
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "redirect"
+
+    redirect {
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+}
+
+resource "aws_lb_listener" "secure" {
+  load_balancer_arn = "${aws_lb.main.arn}"
+  port              = "443"
+  protocol          = "HTTPS"
+  certificate_arn   = "${var.ssl_certificate_id}"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = "${aws_lb_target_group.main.arn}"
   }
 }
 
@@ -107,8 +123,8 @@ resource "aws_route53_record" "external" {
   type    = "A"
 
   alias {
-    zone_id                = "${aws_elb.main.zone_id}"
-    name                   = "${aws_elb.main.dns_name}"
+    zone_id                = "${aws_lb.main.zone_id}"
+    name                   = "${aws_lb.main.dns_name}"
     evaluate_target_health = false
   }
 }
@@ -119,8 +135,8 @@ resource "aws_route53_record" "internal" {
   type    = "A"
 
   alias {
-    zone_id                = "${aws_elb.main.zone_id}"
-    name                   = "${aws_elb.main.dns_name}"
+    zone_id                = "${aws_lb.main.zone_id}"
+    name                   = "${aws_lb.main.dns_name}"
     evaluate_target_health = false
   }
 }
@@ -131,17 +147,17 @@ resource "aws_route53_record" "internal" {
 
 // The ELB name.
 output "name" {
-  value = "${aws_elb.main.name}"
+  value = "${aws_lb.main.name}"
 }
 
 // The ELB ID.
 output "id" {
-  value = "${aws_elb.main.id}"
+  value = "${aws_lb.main.id}"
 }
 
 // The ELB dns_name.
 output "dns" {
-  value = "${aws_elb.main.dns_name}"
+  value = "${aws_lb.main.dns_name}"
 }
 
 // FQDN built using the zone domain and name (external)
@@ -156,5 +172,10 @@ output "internal_fqdn" {
 
 // The zone id of the ELB
 output "zone_id" {
-  value = "${aws_elb.main.zone_id}"
+  value = "${aws_lb.main.zone_id}"
+}
+
+// The ARN of the target group
+output "target_id" {
+  value = "${aws_lb_target_group.main.arn}"
 }
