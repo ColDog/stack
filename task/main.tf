@@ -62,11 +62,6 @@ variable "memory" {
   default     = 512
 }
 
-variable "log_driver" {
-  description = "The log driver to use use for the container"
-  default     = "journald"
-}
-
 variable "role" {
   description = "The IAM Role to assign to the Container"
   default     = ""
@@ -75,6 +70,13 @@ variable "role" {
 /**
  * Resources.
  */
+
+resource "aws_cloudwatch_log_group" "main" {
+  name              = "/${var.name}"
+  retention_in_days = 30
+}
+
+data "aws_region" "current" {}
 
 # The ECS task definition.
 
@@ -101,9 +103,11 @@ resource "aws_ecs_task_definition" "main" {
     "entryPoint": ${var.entry_point},
     "mountPoints": [],
     "logConfiguration": {
-      "logDriver": "${var.log_driver}",
+      "logDriver": "awslogs",
       "options": {
-        "tag": "${var.name}"
+        "awslogs-region": "${data.aws_region.current.name}",
+        "awslogs-group": "${aws_cloudwatch_log_group.main.name}",
+        "awslogs-stream-prefix": "${var.name}"
       }
     }
   }
