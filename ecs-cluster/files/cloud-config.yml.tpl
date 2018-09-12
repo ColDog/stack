@@ -14,3 +14,6 @@ bootcmd:
   - echo 'ECS_LOGFILE=/log/ecs-agent.log' >> /etc/ecs/ecs.config
   - echo 'ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]' >> /etc/ecs/ecs.config
   - echo 'ECS_LOGLEVEL=info' >> /etc/ecs/ecs.config
+
+  - yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+  - systemctl start amazon-ssm-agent

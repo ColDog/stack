@@ -53,23 +53,40 @@ variable "cluster" {
   description = "Cluster name"
 }
 
+data "aws_ami" "ec2_linux" {
+  most_recent = true
 
-module "ami" {
-  source        = "github.com/terraform-community-modules/tf_aws_ubuntu_ami/ebs"
-  region        = "${module.defaults.region}"
-  distribution  = "trusty"
-  instance_type = "${var.instance_type}"
+  filter {
+    name   = "name"
+    values = ["amzn-ami-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  filter {
+    name   = "owner-alias"
+    values = ["amazon"]
+  }
 }
 
 resource "aws_instance" "bastion" {
-  ami                    = "${module.ami.ami_id}"
+  ami                    = "${data.aws_ami.ec2_linux.id}"
   source_dest_check      = false
   instance_type          = "${var.instance_type}"
   subnet_id              = "${var.subnet_id}"
   key_name               = "${var.key_name}"
   vpc_security_group_ids = ["${split(",",var.security_groups)}"]
   monitoring             = true
-  user_data              = "${file(format("%s/user_data.sh", path.module))}"
+
+  user_data = <<EOF
+#!/bin/bash
+
+yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+systemctl start amazon-ssm-agent
+EOF
 
   tags {
     Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-bastion-ec2"

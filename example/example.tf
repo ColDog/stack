@@ -23,6 +23,16 @@ module "cert" {
   cluster     = "${module.stack.cluster}"
 }
 
+module "db" {
+  source = "../rds"
+  name   = "example"
+
+  environment = "${module.stack.environment}"
+  cluster     = "${module.stack.cluster}"
+  vpc_id      = "${module.stack.vpc_id}"
+  subnet_ids  = ["${module.stack.internal_subnets}"]
+}
+
 module "example" {
   source            = "../web-service"
   name              = "example"
@@ -32,7 +42,7 @@ module "example" {
   external_dns_name = "example.coldog.xyz"
 
   secret_vars = [
-    "DB_PASSWORD=test123"
+    "DATABASE_URL=${module.db.url}",
   ]
 
   env_vars = <<EOF

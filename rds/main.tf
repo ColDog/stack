@@ -12,7 +12,7 @@ variable "environment" {
 
 variable "encrypted" {
   description = "Enable encryption and a custom KMS key"
-  default = true
+  default     = false
 }
 
 variable "engine" {
@@ -42,6 +42,7 @@ variable "username" {
 
 variable "password" {
   description = "Postgres user password"
+  default     = ""
 }
 
 variable "multi_az" {
@@ -120,6 +121,10 @@ variable "subnet_ids" {
   type        = "list"
 }
 
+module "defaults" {
+  source = "../defaults"
+}
+
 resource "aws_security_group" "main" {
   name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-sg"
   description = "Allows traffic to RDS from other security groups"
@@ -162,7 +167,6 @@ resource "aws_db_subnet_group" "main" {
   subnet_ids  = ["${var.subnet_ids}"]
 }
 
-
 resource "aws_kms_key" "main" {
   count = "${var.encrypted ? 1 : 0}"
 
@@ -179,6 +183,10 @@ resource "aws_kms_key" "main" {
   }
 }
 
+resource "random_id" "password" {
+  byte_length = 32
+}
+
 resource "aws_db_instance" "main" {
   identifier = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db"
 
@@ -186,7 +194,7 @@ resource "aws_db_instance" "main" {
   engine         = "${var.engine}"
   engine_version = "${var.engine_version}"
   username       = "${coalesce(var.username, var.name)}"
-  password       = "${var.password}"
+  password       = "${var.password == "" ? random_id.password.hex : var.password}"
   multi_az       = "${var.multi_az}"
   name           = "${coalesce(var.database, var.name)}"
 
@@ -207,9 +215,10 @@ resource "aws_db_instance" "main" {
   # Network / security
   vpc_security_group_ids = ["${aws_security_group.main.id}"]
   publicly_accessible    = "${var.publicly_accessible}"
+  db_subnet_group_name   = "${aws_db_subnet_group.main.name}"
+  storage_encrypted      = "${var.encrypted}"
 
-  storage_encrypted = "${var.encrypted}"
-  kms_key_id        = "${var.encrypted ? aws_kms_key.main.arn : ""}"
+  # kms_key_id        = "${var.encrypted ? aws_kms_key.main.arn : ""}"
 
   tags {
     Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-sg"
