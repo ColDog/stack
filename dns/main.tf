@@ -22,10 +22,32 @@ variable "vpc_id" {
   default     = ""
 }
 
+variable "environment" {
+  description = "Environment"
+}
+
+variable "cluster" {
+  description = "Environment"
+}
+
+module "defaults" {
+  source = "../defaults"
+}
+
 resource "aws_route53_zone" "main" {
   name    = "${var.name}"
   vpc_id  = "${var.vpc_id}"
-  comment = ""
+  comment = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-dns"
+
+  tags {
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-dns"
+    Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "${var.name}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
+    VPC         = "${var.vpc_id}"
+  }
 }
 
 // The domain name.

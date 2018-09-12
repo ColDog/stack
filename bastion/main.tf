@@ -11,7 +11,6 @@
  *
  *    module "bastion" {
  *      source            = "github.com/segmentio/stack/bastion"
- *      region            = "us-west-2"
  *      security_groups   = "sg-1,sg-2"
  *      vpc_id            = "vpc-12"
  *      key_name          = "ssh-key"
@@ -21,13 +20,13 @@
  *
  */
 
+module "defaults" {
+  source = "../defaults"
+}
+
 variable "instance_type" {
   default     = "t2.micro"
   description = "Instance type, see a list at: https://aws.amazon.com/ec2/instance-types/"
-}
-
-variable "region" {
-  description = "AWS Region, e.g us-west-2"
 }
 
 variable "security_groups" {
@@ -50,9 +49,14 @@ variable "environment" {
   description = "Environment tag, e.g prod"
 }
 
+variable "cluster" {
+  description = "Cluster name"
+}
+
+
 module "ami" {
   source        = "github.com/terraform-community-modules/tf_aws_ubuntu_ami/ebs"
-  region        = "${var.region}"
+  region        = "${module.defaults.region}"
   distribution  = "trusty"
   instance_type = "${var.instance_type}"
 }
@@ -68,8 +72,13 @@ resource "aws_instance" "bastion" {
   user_data              = "${file(format("%s/user_data.sh", path.module))}"
 
   tags {
-    Name        = "bastion"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-bastion-ec2"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "bastion"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
+    Description = "AWS bastion host"
   }
 }
 

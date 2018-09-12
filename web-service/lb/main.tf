@@ -12,10 +12,15 @@ variable "name" {
 
 variable "subnet_ids" {
   description = "Comma separated list of subnet IDs"
+  type        = "list"
 }
 
 variable "environment" {
   description = "Environment tag, e.g prod"
+}
+
+variable "cluster" {
+  description = "The cluster name"
 }
 
 variable "port" {
@@ -24,6 +29,7 @@ variable "port" {
 
 variable "security_groups" {
   description = "Comma separated list of security group IDs"
+  type        = "list"
 }
 
 variable "healthcheck" {
@@ -62,13 +68,17 @@ variable "vpc_id" {
  * Resources.
  */
 
+module "defaults" {
+  source = "../../defaults"
+}
+
 resource "aws_lb" "main" {
-  name = "${var.name}-lb"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}"
 
   internal           = false
   load_balancer_type = "application"
-  subnets            = ["${split(",", var.subnet_ids)}"]
-  security_groups    = ["${split(",",var.security_groups)}"]
+  subnets            = ["${var.subnet_ids}"]
+  security_groups    = ["${var.security_groups}"]
   idle_timeout       = 30
 
   access_logs {
@@ -76,9 +86,12 @@ resource "aws_lb" "main" {
   }
 
   tags {
-    Name        = "${var.name}-lb"
-    Service     = "${var.name}"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-lb"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "${var.name}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 }
 

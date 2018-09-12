@@ -39,6 +39,10 @@ variable "cluster" {
   description = "The cluster name or ARN"
 }
 
+variable "cluster_arn" {
+  description = "The cluster name or ARN"
+}
+
 /**
  * Options.
  */
@@ -84,7 +88,7 @@ variable "deployment_maximum_percent" {
 
 resource "aws_ecs_service" "main" {
   name                               = "${module.task.name}"
-  cluster                            = "${var.cluster}"
+  cluster                            = "${var.cluster_arn}"
   task_definition                    = "${module.task.arn}"
   desired_count                      = "${var.desired_count}"
   deployment_minimum_healthy_percent = "${var.deployment_minimum_healthy_percent}"
@@ -98,6 +102,8 @@ resource "aws_ecs_service" "main" {
 module "task" {
   source = "../task"
 
+  environment   = "${var.environment}"
+  cluster       = "${var.cluster}"
   name          = "${coalesce(var.name, var.image)}"
   image         = "${var.image}"
   image_version = "${var.version}"

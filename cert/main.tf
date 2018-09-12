@@ -13,6 +13,10 @@
  *
  */
 
+module "defaults" {
+  source = "../defaults"
+}
+
 variable "domain_name" {
   description = "Domain name for route"
 }
@@ -26,10 +30,33 @@ variable "subject_alternative_names" {
   default     = []
 }
 
+variable "name" {
+  description = "Certificate name"
+}
+
+variable "environment" {
+  description = "Environment"
+}
+
+variable "cluster" {
+  description = "Environment"
+}
+
+
 resource "aws_acm_certificate" "cert" {
   domain_name               = "${var.domain_name}"
   validation_method         = "DNS"
   subject_alternative_names = ["${var.subject_alternative_names}"]
+
+  tags {
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-cert"
+    Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "${var.name}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
+    Description = "ACM certificate"
+  }
 }
 
 resource "aws_route53_record" "cert_validation" {

@@ -2,6 +2,19 @@ variable "name" {
   description = "RDS instance name"
 }
 
+variable "cluster" {
+  description = "The cluster name"
+}
+
+variable "environment" {
+  description = "The environment name"
+}
+
+variable "encrypted" {
+  description = "Enable encryption and a custom KMS key"
+  default = true
+}
+
 variable "engine" {
   description = "Database engine: mysql, postgres, etc."
   default     = "postgres"
@@ -108,7 +121,7 @@ variable "subnet_ids" {
 }
 
 resource "aws_security_group" "main" {
-  name        = "${var.name}-rds"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-sg"
   description = "Allows traffic to RDS from other security groups"
   vpc_id      = "${var.vpc_id}"
 
@@ -134,18 +147,40 @@ resource "aws_security_group" "main" {
   }
 
   tags {
-    Name = "RDS (${var.name})"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-sg"
+    Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "${var.name}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 }
 
 resource "aws_db_subnet_group" "main" {
-  name        = "${var.name}"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-subnet"
   description = "RDS subnet group"
   subnet_ids  = ["${var.subnet_ids}"]
 }
 
+
+resource "aws_kms_key" "main" {
+  count = "${var.encrypted ? 1 : 0}"
+
+  description             = "RDS KMS key for ${var.name}"
+  deletion_window_in_days = 10
+
+  tags {
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-key"
+    Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "${var.name}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
+  }
+}
+
 resource "aws_db_instance" "main" {
-  identifier = "${var.name}"
+  identifier = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db"
 
   # Database
   engine         = "${var.engine}"
@@ -170,9 +205,20 @@ resource "aws_db_instance" "main" {
   allocated_storage = "${var.allocated_storage}"
 
   # Network / security
-  db_subnet_group_name   = "${aws_db_subnet_group.main.id}"
   vpc_security_group_ids = ["${aws_security_group.main.id}"]
   publicly_accessible    = "${var.publicly_accessible}"
+
+  storage_encrypted = "${var.encrypted}"
+  kms_key_id        = "${var.encrypted ? aws_kms_key.main.arn : ""}"
+
+  tags {
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-db-sg"
+    Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Application = "${var.name}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
+  }
 }
 
 output "addr" {

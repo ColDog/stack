@@ -238,6 +238,22 @@ module "vpc" {
 
 You can customize any part of the stack you'd like.
 
+### Naming
+
+Naming conventions follow the format:
+
+    "{environment}-{cluster}-{region}-{name}-{resource}"
+
+Tags:
+
+    Name
+    Environment
+    Cluster
+    Application
+    Region
+    ManagedBy
+    Description
+
 ### AMIs
 
 All of the default AMIs that ship with stack are build using [packer][packer]. If you'd like to build your own, you can make changes to the `./packer` directory and then re-build using:

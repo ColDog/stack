@@ -1,13 +1,18 @@
-variable "name" {
-  description = "The name of the stack to use in security groups"
-}
 
 variable "environment" {
   description = "The name of the environment for this stack"
 }
 
+variable "cluster" {
+  description = "The name of the cluster for this stack"
+}
+
+module "defaults" {
+  source = "../defaults"
+}
+
 resource "aws_iam_role" "default_ecs_role" {
-  name = "ecs-role-${var.name}-${var.environment}"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ecs-role"
 
   assume_role_policy = <<EOF
 {
@@ -29,7 +34,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "default_ecs_service_role_policy" {
-  name = "ecs-service-role-policy-${var.name}-${var.environment}"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ecs-service-policy"
   role = "${aws_iam_role.default_ecs_role.id}"
 
   policy = <<EOF
@@ -51,7 +56,7 @@ EOF
 }
 
 resource "aws_iam_role_policy" "default_ecs_instance_role_policy" {
-  name = "ecs-instance-role-policy-${var.name}-${var.environment}"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ecs-instance-policy"
   role = "${aws_iam_role.default_ecs_role.id}"
 
   policy = <<EOF
@@ -93,7 +98,7 @@ EOF
 }
 
 resource "aws_iam_instance_profile" "default_ecs" {
-  name  = "ecs-instance-profile-${var.name}-${var.environment}"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ecs-instance-profile"
   path  = "/"
   role  = "${aws_iam_role.default_ecs_role.name}"
 }

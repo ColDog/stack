@@ -18,19 +18,18 @@
  *        key_name             = "ssh-key"
  *        security_groups      = "1,2"
  *        iam_instance_profile = "id"
- *        region               = "us-west-2"
  *        availability_zones   = ["a", "b"]
  *        instance_type        = "t2.small"
  *      }
  *
  */
 
-variable "name" {
-  description = "The cluster name, e.g cdn"
-}
-
 variable "environment" {
   description = "Environment tag, e.g prod"
+}
+
+variable "cluster" {
+  description = "Cluster name"
 }
 
 variable "vpc_id" {
@@ -56,10 +55,6 @@ variable "security_groups" {
 
 variable "iam_instance_profile" {
   description = "Instance profile ARN to use in the launch configuration"
-}
-
-variable "region" {
-  description = "AWS Region"
 }
 
 variable "instance_type" {
@@ -121,10 +116,14 @@ variable "extra_cloud_config_content" {
   default     = ""
 }
 
+module "defaults" {
+  source = "../defaults"
+}
+
 resource "aws_security_group" "cluster" {
-  name        = "${var.name}-ecs-cluster"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ecs-sg"
   vpc_id      = "${var.vpc_id}"
-  description = "Allows traffic from and to the EC2 instances of the ${var.name} ECS cluster"
+  description = "Allows traffic from and to the EC2 instances of the ECS cluster"
 
   ingress {
     from_port       = 0
@@ -141,8 +140,11 @@ resource "aws_security_group" "cluster" {
   }
 
   tags {
-    Name        = "ECS cluster (${var.name})"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ecs-sg"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 
   lifecycle {
@@ -151,7 +153,7 @@ resource "aws_security_group" "cluster" {
 }
 
 resource "aws_ecs_cluster" "main" {
-  name = "${var.name}"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-cluster"
 
   lifecycle {
     create_before_destroy = true
@@ -163,8 +165,8 @@ data "template_file" "ecs_cloud_config" {
 
   vars {
     environment      = "${var.environment}"
-    name             = "${var.name}"
-    region           = "${var.region}"
+    name             = "${var.environment}-${var.cluster}-${module.defaults.region_code}-cluster"
+    region           = "${module.defaults.region}"
     docker_auth_type = "${var.docker_auth_type}"
     docker_auth_data = "${var.docker_auth_data}"
   }
@@ -186,7 +188,7 @@ data "template_cloudinit_config" "cloud_config" {
 }
 
 resource "aws_launch_configuration" "main" {
-  name_prefix = "${format("%s-", var.name)}"
+  name_prefix = "${var.environment}-${var.cluster}-${module.defaults.region_code}-lc-"
 
   image_id                    = "${var.image_id}"
   instance_type               = "${var.instance_type}"
@@ -216,7 +218,7 @@ resource "aws_launch_configuration" "main" {
 }
 
 resource "aws_autoscaling_group" "main" {
-  name = "${var.name}"
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-asg"
 
   vpc_zone_identifier  = ["${var.subnet_ids}"]
   launch_configuration = "${aws_launch_configuration.main.id}"
@@ -227,13 +229,13 @@ resource "aws_autoscaling_group" "main" {
 
   tag {
     key                 = "Name"
-    value               = "${var.name}"
+    value               = "${var.environment}-${var.cluster}-${module.defaults.region_code}-ec2"
     propagate_at_launch = true
   }
 
   tag {
     key                 = "Cluster"
-    value               = "${var.name}"
+    value               = "${var.cluster}"
     propagate_at_launch = true
   }
 
@@ -243,13 +245,25 @@ resource "aws_autoscaling_group" "main" {
     propagate_at_launch = true
   }
 
+  tag {
+    key                 = "Region"
+    value               = "${module.defaults.region_code}"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "ManagedBy"
+    value               = "terraform"
+    propagate_at_launch = true
+  }
+
   lifecycle {
     create_before_destroy = true
   }
 }
 
 resource "aws_autoscaling_policy" "scale_up" {
-  name                   = "${var.name}-scaleup"
+  name                   = "${var.environment}-${var.cluster}-${module.defaults.region_code}-scaleup"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -261,7 +275,7 @@ resource "aws_autoscaling_policy" "scale_up" {
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
-  name                   = "${var.name}-scaledown"
+  name                   = "${var.environment}-${var.cluster}-${module.defaults.region_code}-scaledown"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
   cooldown               = 300
@@ -273,7 +287,7 @@ resource "aws_autoscaling_policy" "scale_down" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "${var.name}-cpureservation-high"
+  alarm_name          = "${var.environment}-${var.cluster}-${module.defaults.region_code}-cpureservation-high"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUReservation"
@@ -295,7 +309,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "memory_high" {
-  alarm_name          = "${var.name}-memoryreservation-high"
+  alarm_name          = "${var.environment}-${var.cluster}-${module.defaults.region_code}-memoryreservation-high"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = "2"
   metric_name         = "MemoryReservation"
@@ -321,7 +335,7 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "${var.name}-cpureservation-low"
+  alarm_name          = "${var.environment}-${var.cluster}-${module.defaults.region_code}-cpureservation-low"
   comparison_operator = "LessThanOrEqualToThreshold"
   evaluation_periods  = "2"
   metric_name         = "CPUReservation"
@@ -347,7 +361,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "memory_low" {
-  alarm_name          = "${var.name}-memoryreservation-low"
+  alarm_name          = "${var.environment}-${var.cluster}-${module.defaults.region_code}-memoryreservation-low"
   comparison_operator = "LessThanOrEqualToThreshold"
   evaluation_periods  = "2"
   metric_name         = "MemoryReservation"
@@ -374,7 +388,7 @@ resource "aws_cloudwatch_metric_alarm" "memory_low" {
 
 // The cluster name, e.g cdn
 output "name" {
-  value = "${var.name}"
+  value = "${var.environment}-${var.cluster}-${module.defaults.region_code}-cluster"
 }
 
 // The cluster security group ID.

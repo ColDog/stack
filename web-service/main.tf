@@ -21,6 +21,10 @@ variable "environment" {
   description = "Environment tag, e.g prod"
 }
 
+variable "cluster" {
+  description = "Cluster name"
+}
+
 variable "image" {
   description = "The docker image name, e.g nginx"
 }
@@ -37,13 +41,15 @@ variable "version" {
 
 variable "subnet_ids" {
   description = "Comma separated list of subnet IDs that will be passed to the ELB module"
+  type        = "list"
 }
 
 variable "security_groups" {
   description = "Comma separated list of security group IDs that will be passed to the ELB module"
+  type        = "list"
 }
 
-variable "cluster" {
+variable "cluster_arn" {
   description = "The cluster name or ARN"
 }
 
@@ -109,6 +115,11 @@ variable "env_vars" {
   default     = "[]"
 }
 
+variable "secret_vars" {
+  description = "Secrets stored in ssm"
+  default     = []
+}
+
 variable "desired_count" {
   description = "The desired count"
   default     = 2
@@ -134,13 +145,18 @@ variable "deployment_maximum_percent" {
   default     = 200
 }
 
+variable "policy" {
+  description = "IAM policy"
+  default     = ""
+}
+
 /**
  * Resources.
  */
 
 resource "aws_ecs_service" "main" {
   name                               = "${module.task.name}"
-  cluster                            = "${var.cluster}"
+  cluster                            = "${var.cluster_arn}"
   task_definition                    = "${module.task.arn}"
   desired_count                      = "${var.desired_count}"
   iam_role                           = "${var.iam_role}"
@@ -149,7 +165,7 @@ resource "aws_ecs_service" "main" {
 
   load_balancer {
     target_group_arn = "${module.elb.target_id}"
-    container_name   = "${module.task.name}"
+    container_name   = "${var.name}"
     container_port   = "${var.container_port}"
   }
 
@@ -168,6 +184,9 @@ module "task" {
   env_vars      = "${var.env_vars}"
   memory        = "${var.memory}"
   cpu           = "${var.cpu}"
+  environment   = "${var.environment}"
+  cluster       = "${var.cluster}"
+  policy        = "${var.policy}"
 
   ports = <<EOF
   [
@@ -179,12 +198,22 @@ module "task" {
 EOF
 }
 
+module "secrets" {
+  source = "../secrets"
+
+  vars        = ["${var.secret_vars}"]
+  name        = "${var.name}"
+  environment = "${var.environment}"
+  cluster     = "${var.cluster}"
+}
+
 module "elb" {
   source = "./lb"
 
-  name               = "${module.task.name}"
+  name               = "${var.name}"
   port               = "${var.container_port}"
   environment        = "${var.environment}"
+  cluster            = "${var.cluster}"
   subnet_ids         = "${var.subnet_ids}"
   external_dns_name  = "${coalesce(var.external_dns_name, module.task.name)}"
   internal_dns_name  = "${coalesce(var.internal_dns_name, module.task.name)}"

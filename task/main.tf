@@ -23,6 +23,10 @@ variable "name" {
   description = "The worker name, if empty the service name is defaulted to the image name"
 }
 
+variable "environment" {}
+
+variable "cluster" {}
+
 /**
  * Optional Variables.
  */
@@ -62,8 +66,8 @@ variable "memory" {
   default     = 512
 }
 
-variable "role" {
-  description = "The IAM Role to assign to the Container"
+variable "policy" {
+  description = "The IAM role policy for this container, raw json."
   default     = ""
 }
 
@@ -76,17 +80,50 @@ resource "aws_cloudwatch_log_group" "main" {
   retention_in_days = 30
 }
 
-data "aws_region" "current" {}
+module "defaults" {
+  source = "../defaults"
+}
+
+resource "aws_iam_role" "main" {
+  count = "${var.policy != "" ? 1 : 0}"
+
+  name = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-ecs-task-role"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2008-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": [
+          "ecs.amazonaws.com",
+          "ec2.amazonaws.com"
+        ]
+      },
+      "Effect": "Allow"
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_role_policy" "main" {
+  count = "${var.policy != "" ? 1 : 0}"
+
+  name   = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-ecs-task-policy"
+  role   = "${aws_iam_role.main.id}"
+  policy = "${var.policy}"
+}
 
 # The ECS task definition.
 
 resource "aws_ecs_task_definition" "main" {
-  family        = "${var.name}"
-  task_role_arn = "${var.role}"
+  family        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-${var.name}-task"
+  task_role_arn = "${var.policy != "" ? aws_iam_role.main.arn : ""}"
 
   lifecycle {
-    ignore_changes        = ["image"]
-    create_before_destroy = true
+    ignore_changes = ["image"]
   }
 
   container_definitions = <<EOF
@@ -105,7 +142,7 @@ resource "aws_ecs_task_definition" "main" {
     "logConfiguration": {
       "logDriver": "awslogs",
       "options": {
-        "awslogs-region": "${data.aws_region.current.name}",
+        "awslogs-region": "${module.defaults.region}",
         "awslogs-group": "${aws_cloudwatch_log_group.main.name}",
         "awslogs-stream-prefix": "${var.name}"
       }

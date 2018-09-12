@@ -2,10 +2,6 @@
  * Creates basic security groups to be used by instances and ELBs.
  */
 
-variable "name" {
-  description = "The name of the security groups serves as a prefix, e.g stack"
-}
-
 variable "vpc_id" {
   description = "The VPC ID"
 }
@@ -14,12 +10,18 @@ variable "environment" {
   description = "The environment, used for tagging, e.g prod"
 }
 
+variable "cluster" {}
+
 variable "cidr" {
   description = "The cidr block to use for internal security groups"
 }
 
+module "defaults" {
+  source = "../defaults"
+}
+
 resource "aws_security_group" "internal_elb" {
-  name        = "${format("%s-%s-internal-elb", var.name, var.environment)}"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-internal-elb"
   vpc_id      = "${var.vpc_id}"
   description = "Allows internal ELB traffic"
 
@@ -42,13 +44,16 @@ resource "aws_security_group" "internal_elb" {
   }
 
   tags {
-    Name        = "${format("%s internal elb", var.name)}"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-internal-elb"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 }
 
 resource "aws_security_group" "external_elb" {
-  name        = "${format("%s-%s-external-elb", var.name, var.environment)}"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-external-elb"
   vpc_id      = "${var.vpc_id}"
   description = "Allows external ELB traffic"
 
@@ -78,13 +83,16 @@ resource "aws_security_group" "external_elb" {
   }
 
   tags {
-    Name        = "${format("%s external elb", var.name)}"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-external-elb"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 }
 
 resource "aws_security_group" "external_ssh" {
-  name        = "${format("%s-%s-external-ssh", var.name, var.environment)}"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-external-ssh"
   description = "Allows ssh from the world"
   vpc_id      = "${var.vpc_id}"
 
@@ -107,13 +115,16 @@ resource "aws_security_group" "external_ssh" {
   }
 
   tags {
-    Name        = "${format("%s external ssh", var.name)}"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-external-ssh"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 }
 
 resource "aws_security_group" "internal_ssh" {
-  name        = "${format("%s-%s-internal-ssh", var.name, var.environment)}"
+  name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-internal-ssh"
   description = "Allows ssh from bastion"
   vpc_id      = "${var.vpc_id}"
 
@@ -136,8 +147,11 @@ resource "aws_security_group" "internal_ssh" {
   }
 
   tags {
-    Name        = "${format("%s internal ssh", var.name)}"
+    Name        = "${var.environment}-${var.cluster}-${module.defaults.region_code}-internal-ssh"
     Environment = "${var.environment}"
+    Cluster     = "${var.cluster}"
+    Region      = "${module.defaults.region_code}"
+    ManagedBy   = "terraform"
   }
 }
 
